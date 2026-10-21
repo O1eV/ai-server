@@ -222,3 +222,10 @@ __marimo__/
 
 ### macOS ###
 .DS_Store
+
+
+### Project: 모델 파일·데이터는 Git에 넣지 않는다 (모델은 S3, 데이터는 로컬/수집 결과) ###
+models/*
+!models/.gitkeep
+data/*
+!data/.gitkeep
