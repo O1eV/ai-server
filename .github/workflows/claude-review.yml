@@ -1,0 +1,40 @@
+name: Claude Review
+
+# PR 코멘트·리뷰에서 @claude를 멘션했을 때만 실행한다.
+# PR open/synchronize 자동 리뷰는 넣지 않는다(사용자 Claude 구독 사용량 절약).
+on:
+  issue_comment:
+    types: [ created ]
+  pull_request_review_comment:
+    types: [ created ]
+  pull_request_review:
+    types: [ submitted ]
+
+jobs:
+  claude-review:
+    # issue_comment는 이슈에도 달리므로 PR 코멘트(github.event.issue.pull_request 존재)일 때만 실행한다.
+    if: |
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+    runs-on: ubuntu-latest
+    # 리뷰 코멘트만 남기므로 코드 push 권한(contents: write)은 주지 않는다.
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      # 쓰기 권한이 있는 사용자만 실행할 수 있다(액션 기본 동작).
+      # github_token을 넘기면 Claude GitHub App 없이 워크플로 토큰(위 permissions 범위)으로 동작한다.
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --max-turns 15
+            --append-system-prompt "이 저장소의 PR 리뷰어로 동작한다. 모든 코멘트는 한국어로 쓴다. 이 저장소는 내부 전용 FastAPI AI 모델 서버(POST /predict, X-API-KEY)와 학습 코드(training/)다. 리뷰 기준: (1) .claude/CLAUDE.md 컨벤션 준수 - PEP 8, Black + isort + Ruff 규칙, 타입 힌트, 학습 코드는 .py 파일에 두고 노트북은 notebooks/ 실험용으로만 사용, 모델 파일(models/)과 데이터(data/)는 Git에 올리지 않음, 커밋과 PR 형식 규칙. (2) 버그와 로직 오류. 특히 학습 데이터 누수: train/validation/test를 시간 순서로 나누지 않거나, 미래 정보가 피처·라벨·정규화(전체 데이터 기준 평균·표준편차 등)에 섞이는 경우. 학습과 서빙의 피처 계산 불일치도 짚는다. (3) 보안 문제: X-API-KEY나 MODEL_API_KEY 등 시크릿이 코드·로그·에러 응답에 노출되는지, 키 비교가 상수시간(hmac.compare_digest)인지, 모델 서버가 외부에 공개될 수 있는 설정(0.0.0.0 바인딩과 포트 공개 등)인지, 신뢰할 수 없는 모델 파일 로드(pickle 등) 여부. (4) 추론 성능: 요청마다 모델을 다시 로드하거나, 추론 경로에서 블로킹 I/O를 하거나, 불필요한 복사·반복 연산으로 추론 100ms 목표를 해치는 코드. (5) 변경에 대한 테스트 누락. 확실한 문제 위주로 파일:라인과 수정 방법을 짧게 적고, 스타일 취향만의 지적은 하지 않는다."
