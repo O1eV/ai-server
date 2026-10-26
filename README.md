@@ -7,7 +7,7 @@ Spring Boot가 최근 캔들을 보내면 Laya 모델이 BUY / HOLD / SELL 확�
 
 ```
 app/            서빙 코드 (FastAPI)
-  main.py       앱 생성, /health, 라우터 자동 등록
+  main.py       앱 생성, 라우터 자동 등록
   api/          기능별 라우터 (모듈마다 router = APIRouter(...) 하나)
   core/         설정·로깅·수명주기·예외·의존성·모델 로딩
   dto/          요청/응답 pydantic 모델
@@ -35,8 +35,6 @@ HuggingFace의 `convaiinnovations/laya`를 쓴다. `LAYA_MODEL_DIR`로 직접 �
 
 | 메서드 | 경로 | 설명 |
 | --- | --- | --- |
-| GET | `/health` | 프로세스 생존 확인 |
-| GET | `/api/v1/model/status` | 로드된 체크포인트 정보 |
 | POST | `/api/v1/predict` | 캔들 → BUY/HOLD/SELL 확률 + confidence |
 
 ## 학습
@@ -56,7 +54,7 @@ PR이 같은 파일에서 충돌하지 않도록 아래 경로만 건드린다.
 
 | 브랜치 | 소유 경로 |
 | --- | --- |
-| `feature/core` | `app/main.py`, `app/api/model_status.py`, `app/core/**`, `app/dto/**/__init__.py`, `common/**`, `tests/conftest.py`, `tests/test_contract.py`, `tests/test_health.py`, `.gitignore`, `README.md`, `AGENTS.md`, `requirements.txt` |
+| `feature/core` | `app/main.py`, `app/core/**`, `app/dto/**/__init__.py`, `common/**`, `tests/conftest.py`, `tests/test_contract.py`, `tests/test_app.py`, `.gitignore`, `README.md`, `AGENTS.md`, `requirements.txt` |
 | `feature/prediction` | `app/api/prediction.py`, `app/services/**`, `app/dto/request/stock_data.py`, `app/dto/response/stock_decision.py`, `tests/test_prediction*.py` |
 | `feature/training` | `training/**`, `data/*/meta.json`, `outputs/**/*.json`, `tests/test_training*.py` |
 

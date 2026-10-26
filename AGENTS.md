@@ -24,7 +24,7 @@ Source of truth is the Notion "OvE" project page (project plan, 팀 컨벤션, A
 ## Folder structure
 
 - `app/`: serving code
-  - `app/main.py`: app creation, `/health`, router auto-registration
+  - `app/main.py`: app creation, router auto-registration
   - `app/api/`: one module per feature; each exposes `router = APIRouter(...)` and is registered automatically. **Do not edit `app/main.py` to add a feature** — it is the shared file every branch would conflict on.
   - `app/core/`: config, logging, lifespan, exceptions/handlers, dependency injection, model loading
   - `app/dto/`: pydantic request/response models
@@ -43,7 +43,7 @@ PRs must not touch paths owned by another feature branch. Merge order is `featur
 
 | Branch | Owned paths |
 | --- | --- |
-| `feature/core` | `app/main.py`, `app/api/model_status.py`, `app/core/**`, `app/dto/**/__init__.py`, `common/**`, `tests/conftest.py`, `tests/test_contract.py`, `tests/test_health.py`, `.gitignore`, `README.md`, `AGENTS.md`, `requirements.txt` |
+| `feature/core` | `app/main.py`, `app/core/**`, `app/dto/**/__init__.py`, `common/**`, `tests/conftest.py`, `tests/test_contract.py`, `tests/test_app.py`, `.gitignore`, `README.md`, `AGENTS.md`, `requirements.txt` |
 | `feature/prediction` | `app/api/prediction.py`, `app/services/**`, `app/dto/request/stock_data.py`, `app/dto/response/stock_decision.py`, `tests/test_prediction*.py` |
 | `feature/training` | `training/**`, `data/*/meta.json`, `outputs/**/*.json`, `tests/test_training*.py` |
 
