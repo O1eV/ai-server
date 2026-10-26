@@ -21,7 +21,3 @@ register_exception_handlers(app)
 for router in iter_routers():
     app.include_router(router, prefix=API_PREFIX)
 
-
-@app.get("/health", tags=["ops"])
-def health() -> dict:
-    return {"status": "ok", "version": APP_VERSION}
