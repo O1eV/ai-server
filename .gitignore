@@ -225,7 +225,22 @@ __marimo__/
 
 
 ### Project: 모델 파일·데이터는 Git에 넣지 않는다 (모델은 S3, 데이터는 로컬/수집 결과) ###
+
+# 체크포인트 (models/Laya, models/Laya-finance 등)
 models/*
 !models/.gitkeep
-data/*
-!data/.gitkeep
+
+# 데이터셋 원본·대용량 파일. data/*/meta.json 같은 메타 정보는 추적한다.
+data/**/*.jsonl
+data/**/*.parquet
+data/**/*.csv
+
+# 학습 산출물: 재현에 필요한 설정 JSON만 추적하고 가중치·대용량 토크나이저는 제외
+outputs/**/*.safetensors
+outputs/**/*.bin
+outputs/**/checkpoint_*/
+outputs/**/tokenizer/tokenizer.json
+
+# 로컬 개발 도구
+.idea/
+.freebuff/
