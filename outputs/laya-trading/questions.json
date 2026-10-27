@@ -1,0 +1,11 @@
+{
+  "action": {
+    "type": "choice",
+    "instructions": "The state shows the last 15 candles of one instrument, oldest first. o/h/l/c are percent changes from the latest close, and v is volume relative to the 15-candle average volume (1.00 = average). Decide the action to take from now: BUY if price is likely to rise meaningfully, SELL if it is likely to fall meaningfully, HOLD if the direction is unclear or the expected move is too small to be worth acting on.",
+    "criteria": {
+      "BUY": "Meaningful rise expected: strong upward momentum, price holding above recent lows, wider up-candles with rising volume, or a breakout from a range",
+      "SELL": "Meaningful fall expected: weakening momentum, price below recent lows, long down-candles with rising volume, or a break down out of a range",
+      "HOLD": "No clear direction: range-bound or choppy candles, low volume, mixed signals, or an expected move too small to justify the cost"
+    }
+  }
+}
