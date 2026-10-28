@@ -14,15 +14,19 @@ KEY = "test-not-a-real-key"
 
 
 @pytest.fixture(autouse=True)
-def _reset_warning(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> Iterator[None]:
-    monkeypatch.setattr(security, "_warned_unset", False)
+def _reset_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> Iterator[None]:
+    monkeypatch.setattr(security, "_warned_insecure", False)
     # 앱 로거는 propagate=False라서 caplog 핸들러를 직접 붙인다.
     logger.addHandler(caplog.handler)
     yield
     logger.removeHandler(caplog.handler)
 
 
-def test_missing_key_header_is_401(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_key_header_is_401(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("MODEL_API_KEY", KEY)
 
     response = client.post("/api/v1/predict", json=_candles())
@@ -34,37 +38,90 @@ def test_missing_key_header_is_401(client: TestClient, monkeypatch: pytest.Monke
 def test_wrong_key_is_401(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODEL_API_KEY", KEY)
 
-    response = client.post("/api/v1/predict", json=_candles(), headers={"X-API-KEY": "wrong"})
+    response = client.post(
+        "/api/v1/predict", json=_candles(), headers={"X-API-KEY": "wrong"}
+    )
 
     assert response.status_code == 401
 
 
-def test_correct_key_passes(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_correct_key_passes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("MODEL_API_KEY", KEY)
 
-    response = client.post("/api/v1/predict", json=_candles(), headers={"X-API-KEY": KEY})
+    response = client.post(
+        "/api/v1/predict", json=_candles(), headers={"X-API-KEY": KEY}
+    )
 
     assert response.status_code == 200
     assert response.json()["decision"] == "BUY"
 
 
 def test_key_value_is_not_logged_or_returned(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("MODEL_API_KEY", KEY)
 
     with caplog.at_level(logging.DEBUG):
-        response = client.post("/api/v1/predict", json=_candles(), headers={"X-API-KEY": "guess-1234"})
+        response = client.post(
+            "/api/v1/predict", json=_candles(), headers={"X-API-KEY": "guess-1234"}
+        )
 
     assert KEY not in response.text
     assert KEY not in caplog.text
     assert "guess-1234" not in caplog.text
 
 
-def test_unset_key_allows_requests_with_a_warning(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+def test_unset_key_rejects_requests(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    monkeypatch.delenv("ALLOW_INSECURE_NO_AUTH", raising=False)
+
+    assert client.post("/api/v1/predict", json=_candles()).status_code == 401
+    # 키를 보내도 서버에 키가 없으면 통과하지 않는다.
+    response = client.post(
+        "/api/v1/predict", json=_candles(), headers={"X-API-KEY": "anything"}
+    )
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_key_rejects_requests(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, blank: str
+) -> None:
+    monkeypatch.setenv("MODEL_API_KEY", blank)
+    monkeypatch.delenv("ALLOW_INSECURE_NO_AUTH", raising=False)
+
+    assert client.post("/api/v1/predict", json=_candles()).status_code == 401
+    response = client.post(
+        "/api/v1/predict", json=_candles(), headers={"X-API-KEY": blank}
+    )
+    assert response.status_code == 401
+
+
+def test_empty_header_is_401(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MODEL_API_KEY", KEY)
+
+    response = client.post(
+        "/api/v1/predict", json=_candles(), headers={"X-API-KEY": ""}
+    )
+
+    assert response.status_code == 401
+
+
+def test_explicit_opt_in_allows_requests_with_a_warning(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    monkeypatch.setenv("ALLOW_INSECURE_NO_AUTH", "1")
 
     with caplog.at_level(logging.WARNING):
         first = client.post("/api/v1/predict", json=_candles())
@@ -72,11 +129,13 @@ def test_unset_key_allows_requests_with_a_warning(
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert caplog.text.count("MODEL_API_KEY가 설정되지 않아") == 1
+    assert caplog.text.count("인증 없이 동작합니다") == 1
 
 
-def test_only_predict_requires_the_key(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configured_key_wins_over_insecure_flag(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("MODEL_API_KEY", KEY)
+    monkeypatch.setenv("ALLOW_INSECURE_NO_AUTH", "1")
 
-    # 인증이 걸린 건 예측 라우터뿐이다. 다른 경로는 인증 전에 404가 난다(헬스체크 등 추가해도 키를 요구하지 않는다).
-    assert client.get("/api/v1/nope").status_code == 404
+    assert client.post("/api/v1/predict", json=_candles()).status_code == 401
