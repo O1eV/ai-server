@@ -69,16 +69,31 @@ export ALLOW_INSECURE_NO_AUTH=1
 맥(클라이언트)에서 실행한다. EC2의 8000 포트로 오는 요청을 내 맥의 8000으로 보낸다.
 
 ```bash
-# 맥에서 실행 (-N: 쉘만 열고 명령은 안 돌림)
-ssh -N -R 8000:127.0.0.1:8000 ec2-user@<EC2_PUBLIC_IP>
+# EC2 보안 그룹에서 TCP 22 인바운드를 맥의 공인 IP로 제한한 뒤 실행
+# Amazon Linux 기본 사용자: ec2-user, Ubuntu AMI: ubuntu
+ssh -i <EC2_KEY.pem> -N -R 8000:127.0.0.1:8000 ec2-user@<EC2_PUBLIC_IP>
 ```
 
-그러면 **EC2의 `127.0.0.1:8000`** 로 오는 요청이 맥의 uvicorn으로 간다.
-Spring은 공인 IP 없이 `http://127.0.0.1:8000` 으로 호출하면 된다.
+이 연결은 **맥에서 EC2로 나가는 SSH 연결**이다. EC2 보안 그룹에 AI 포트(8000)를 인터넷 대상으로
+열 필요는 없다. SSH 인바운드 TCP 22는 가능한 한 맥의 현재 공인 IP(`/32`)로 제한한다.
+그러면 **EC2 호스트의 `127.0.0.1:8000`** 로 오는 요청이 맥의 uvicorn으로 간다.
+Spring이 EC2 호스트에서 직접 실행되면 `MODEL_BASE_URL=http://127.0.0.1:8000`으로 호출하면 된다.
 
-> EC2의 8000 포트가 비어있어야 한다. EC2에서 이미 다른 서비스가 8000을 쓰면 포트를 바꾸고
-> 양쪽(`-R <포트>`와 Spring의 `MODEL_BASE_URL`)을 같은 값으로 맞춘다.
-> 접속이 끊기면 터널도 죽으므로 `autossh`로 유지하거나 재연결 스크립트를 쓴다.
+**Spring이 Docker Compose 컨테이너 안에서 실행되는 경우**, 컨테이너의 `127.0.0.1`은 컨테이너
+자신이다. 또한 위의 기본 `ssh -R 8000:...`은 EC2 호스트의 loopback에만 리스닝하므로,
+`host.docker.internal`로 바꾸는 것만으로 컨테이너에서 접근할 수 있는 것은 아니다. 권장 순서는
+Spring을 EC2 호스트 네트워크에서 실행하거나 Cloudflare Tunnel URL을 쓰는 것이다. Docker를 쓸 경우
+Spring이 EC2 호스트로 연결할 수 있도록 호스트 게이트웨이를 설정할 수 있지만, SSH 원격 포트가
+loopback 전용이면 이 설정만으로는 접근이 되지 않는다.
+
+보안팀이 허용하고 네트워크 접근을 제한할 수 있을 때만 SSH 원격 포트를 EC2 사설 IP에 바인딩하도록
+sshd의 `GatewayPorts clientspecified` 설정을 검토한다. 이 경우 `ssh -R <EC2_PRIVATE_IP>:8000:127.0.0.1:8000`
+형태를 사용하고, 보안 그룹/호스트 방화벽에서 해당 포트를 필요한 소스에만 허용한다.
+`MODEL_API_KEY`도 반드시 설정하며 공개 인터페이스에 무제한으로 바인딩하지 않는다.
+
+EC2의 포트가 이미 사용 중이면 `-R`의 원격 포트와 Spring의 `MODEL_BASE_URL` 포트를 같은 값으로
+바꾼다. SSH 접속이 끊기면 터널도 종료되므로 `autossh` 또는 서비스 관리자의 재시작 정책 등으로
+연결을 유지한다.
 
 ### 방안 B. Cloudflare Tunnel (터널 유지가 쉬움)
 
@@ -97,14 +112,30 @@ cloudflared tunnel --url http://127.0.0.1:8000
 
 | 이름 | 값 | 설명 |
 | --- | --- | --- |
-| `MODEL_BASE_URL` | `http://127.0.0.1:8000` (역터널) 또는 `https://<...>.trycloudflare.com` | AI 서버 주소 |
-| `MODEL_API_KEY` | 맥의 `MODEL_API_KEY`와 **같은 값** | `X-API-KEY` 헤더로 보낸다 |
-| `model.enabled` | `true` | AI 호출 기능 on/off |
+| `MODEL_BASE_URL` | 호스트 네트워크/역터널: `http://127.0.0.1:8000`; Cloudflare: `https://<...>.trycloudflare.com`; 허용된 EC2 사설 인터페이스 바인딩: `http://<EC2_PRIVATE_IP>:8000` | AI 서버의 base URL. 요청 경로는 `/api/v1/predict` |
+| `MODEL_API_KEY` | 맥 AI 서버의 `MODEL_API_KEY`와 **동일한 값** | Spring이 요청 헤더 `X-API-KEY`로 전달 |
+| `model.enabled` | `true` | Spring AI 호출 기능 on/off (application 설정) |
 
 양쪽 키가 다르면 전부 401이다. Spring이 401을 받으면 모델 호출을 건너뛰므로
-신호가 아예 안 나오는 증상으로 나타날 수 있다.
+신호가 아예 안 나오는 증상으로 나타날 수 있다. Spring의 HTTP 클라이언트는 base URL 뒤에
+`/api/v1/predict`를 붙여 POST하고, JSON 캔들 배열을 보내면서 `X-API-KEY` 헤더를 전달해야 한다.
 
-`application.yml` 예시:
+EC2에서는 키를 Git 저장소나 커밋된 `application.yml`에 넣지 않는다. AWS Systems Manager
+Parameter Store의 SecureString 또는 Secrets Manager 등에서 배포 시점에 가져와 Spring 프로세스의
+`MODEL_API_KEY` 환경변수로 주입한다. EC2 인스턴스 역할에는 해당 시크릿을 읽는 데 필요한 권한만
+부여하고, 키는 로그에 출력하지 않는다. Compose를 쓴다면 `.env` 파일을 Compose의
+`environment:`에서 명시적으로 컨테이너에 전달해야 한다 (`.env`만 두는 것으로 컨테이너에 자동 전달되지 않는다).
+
+```yaml
+# compose 설정 예시: 실제 키는 compose 파일에 쓰지 않는다.
+services:
+  spring:
+    environment:
+      MODEL_API_KEY: ${MODEL_API_KEY:?MODEL_API_KEY must be set}
+```
+
+아래 `application.yml`은 설정 키 구조 예시다. 실제 Spring 프로젝트의 설정 클래스가 읽는
+프로퍼티 이름 및 환경변수 바인딩 규칙과 일치하는지 그 저장소에서도 확인해야 한다.
 
 ```yaml
 model:
@@ -118,7 +149,8 @@ model:
 - 첫 추론 호출은 모델 준비 때문에 약 **3초**가 걸린다.
 - Spring의 HTTP 타임아웃은 **500ms** → 첫 호출이 500으로 실패한다.
 - 그래서 서버 시작(lifespan) 때 더미 캔들 15개로 `predict`를 1회 호출해 예열한다.
-  이후 요청부터는 준비된 모델을 써서 500ms 안에 답한다.
+  이로써 실제 첫 요청에서 모델의 cold-start 지연이 발생하는 것을 줄인다. 다만 실제 요청 시간은
+  입력·디바이스·서버 부하에 따라 달라지므로, 모든 요청이 500ms 이내임을 보장하는 것은 아니다.
 
 ```bash
 # 워밍업을 끄고 싶을 때 (디버깅용)
