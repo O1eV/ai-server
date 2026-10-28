@@ -60,3 +60,10 @@ def client(model_bundle: ModelBundle, monkeypatch: pytest.MonkeyPatch) -> Iterat
     monkeypatch.setattr(lifespan_module, "load_model_bundle", lambda *a, **k: model_bundle)
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(autouse=True)
+def _allow_no_auth_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 인증을 다루지 않는 테스트는 키 없이 호출한다. 인증 테스트가 이 값을 직접 덮어쓴다.
+    monkeypatch.delenv("MODEL_API_KEY", raising=False)
+    monkeypatch.setenv("ALLOW_INSECURE_NO_AUTH", "1")

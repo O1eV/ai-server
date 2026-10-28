@@ -27,3 +27,8 @@ class PredictionError(LayaError):
 class InvalidMarketDataError(LayaError):
     status_code = 422
     code = "invalid_market_data"
+
+
+class UnauthorizedError(LayaError):
+    status_code = 401
+    code = "unauthorized"
