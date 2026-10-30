@@ -44,7 +44,10 @@ def resolve_device() -> str:
         return requested
     if torch.cuda.is_available():
         return "cuda"
-    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+    if (
+        getattr(torch.backends, "mps", None) is not None
+        and torch.backends.mps.is_available()
+    ):
         return "mps"
     return "cpu"
 
@@ -80,5 +83,5 @@ def get_settings() -> Settings:
         device=resolve_device(),
         log_level=_env_str("LOG_LEVEL", "INFO").upper(),
         interval=_env_str("LAYA_INTERVAL", DEFAULT_INTERVAL),
-        warmup=_env_bool("LAYA_WARMUP", False),
+        warmup=_env_bool("LAYA_WARMUP", True),
     )
