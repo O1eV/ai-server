@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any, Dict, Mapping, Sequence
 
 from app.core.config import get_settings
@@ -9,6 +10,10 @@ from app.core.model_loader import ModelBundle
 from app.dto.request.stock_data import StockData
 from app.dto.response.stock_decision import Decision
 from common.contract import LABELS, NUM_CANDLES, QUESTION_ID, build_state, candles_from_rows
+
+# MPS(Metal) 모델을 여러 스레드가 동시에 호출하면 프로세스가 죽는다(MTLCommandBuffer assertion).
+# 동기 엔드포인트는 스레드풀에서 동시에 실행되므로 추론 구간만 프로세스 전역 락으로 직렬화한다.
+_INFERENCE_LOCK = threading.Lock()
 
 
 def _probabilities(answer: Mapping[str, Any]) -> Dict[str, float]:
@@ -31,7 +36,8 @@ def predict(candles: Sequence[StockData], bundle: ModelBundle) -> Decision:
     )
 
     try:
-        result = bundle.agent.predict(state, bundle.questions)
+        with _INFERENCE_LOCK:
+            result = bundle.agent.predict(state, bundle.questions)
     except Exception as exc:
         logger.exception("모델 추론 실패")
         raise PredictionError("모델 추론에 실패했습니다.") from exc
