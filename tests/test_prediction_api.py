@@ -33,6 +33,7 @@ def test_predict_returns_decision(client: TestClient) -> None:
         "sell": 0.1,
         "hold": 0.2,
         "confidence": 0.42,
+        "model_version": "fake-checkpoint",
     }
 
 
@@ -116,4 +117,5 @@ def test_decision_follows_model_choice_and_ignores_unknown_labels(
         "sell": 0.2,
         "hold": 0.5,
         "confidence": 0.42,
+        "model_version": "fake-checkpoint",
     }

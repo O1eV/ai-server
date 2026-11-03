@@ -58,4 +58,5 @@ def predict(candles: Sequence[StockData], bundle: ModelBundle) -> Decision:
         sell=probabilities["SELL"],
         hold=probabilities["HOLD"],
         confidence=float(confidence),
+        model_version=bundle.model_version,
     )
