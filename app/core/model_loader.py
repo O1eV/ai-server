@@ -28,6 +28,12 @@ class ModelBundle:
     def loaded(self) -> bool:
         return self.agent is not None
 
+    @property
+    def model_version(self) -> Optional[str]:
+        # 로딩 로그에 찍는 경로(model_path)에서 이름만 뽑는다. 못 구하면 None.
+        name = Path(self.model_path.rstrip("/\\")).name if self.model_path else ""
+        return name or None
+
 
 def load_questions(model_path: str) -> Dict[str, Dict[str, Any]]:
     path = Path(model_path) / "questions.json"
